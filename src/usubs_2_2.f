@@ -39,8 +39,6 @@ C      IMPLICIT NONE
       COMMON /CONTRL/ GNUP,GNUU,UP,DTMULT,DTMAX,ME,ISSFLO,ISSTRA,ITCYC, 
      1   NPCYC,NUCYC,NPRINT,NBCFPR,NBCSPR,NBCPPR,NBCUPR,IREAD,          
      2   ISTORE,NOUMAT,IUNSAT,KTYPE                                     
-      COMMON /PARAMS/ COMPFL,COMPMA,DRWDU,CW,CS,RHOS,SIGMAW,SIGMAS,
-     1   RHOW0,URHOW0,VISC0,PRODF1,PRODS1,PRODF0,PRODS0,CHI1,CHI2 
       DIMENSION KTYPE(2)                                                
       DOUBLE PRECISION TIDE
       REAL SEEPX,SEEPY ! The x- and y-coordinate of seepage node
@@ -160,15 +158,35 @@ C      WRITE(*,*) QET,UET,PET,UVM,NGT,ITE
 C      WRITE(*,*) TASP,TANE,TPSP,TPNP,TM,RHOST,SC
 C      TIDE=4.6+1.5*SIN(2*3.1415926*TSC/12/60/60)+0.5*SIN(2*3.1415926*IT*60/12.42/60/60)
 C      TIDE=TM+TASP*SIN(2.D0*PI*IT*60/12/60/60)+TANP*SIN(2*PI*IT*60/12.42/60/60)
-      TIDE=TM+TASP*DSIN(2.D0*PI*TSEC/TPSP)+TANE*DSIN(2.D0*PI*TSEC/TPNP)
+C      TIDE=TM+TASP*DSIN(2.D0*PI*TSEC/TPSP)+TANE*DSIN(2.D0*PI*TSEC/TPNP)
 C      TIDE=4.2D0+1.0D0*SIN(TSEC*3.1415926D0/360.D0/60.D0)       ! Chengji 2015-03-31
-      IF (IT.EQ.1) THEN  
-          OPEN(21,FILE='TIDE.DAT',STATUS='UNKNOWN')   
-          WRITE(21,98)
-   98     FORMAT('  IT',4X,'TIME(DAY)',3X,'TIDAL LEVEL (M)')
+C
+C      FLOODING OF FLOODPLAIN
+C   TASP   -- TOTAL LENGTH OF HYDROGRAPH (sec); 
+C   TANE   -- EXTENT OF INCREASE OF RIVERLEVEL (MAXIMUM WATERLEVEL-BASE WATERLEVEL)/BASE WATERLEVEL;
+C   TPSP   -- Moment of flood peak (sec); 
+C   TPNP   -- Flood period (sec); 
+C   TM     -- BASE WATERLEVEL (m); 
+C   RHOST  -- THE DENSITY FOR TIDE WATER; 
+C   SC     -- SALINITY OF THE SEAWATER; 
+C   ITT    -- ITERRATION CRITERIA FOR BCTIME SHOULD BE LARGE OR EQUAL THAN 2
+      TIDE=TM*(1.0+TANE*EXP(-1.0*DABS((MOD(TSEC,TASP)-TPSP)/TPNP)**3.0))
+C
+C      IF (IT.EQ.1) THEN  
+C          OPEN(21,FILE='TIDE.DAT',STATUS='UNKNOWN')   
+C          WRITE(21,98)
+C   98     FORMAT('  IT',4X,'TIME(DAY)',3X,'TIDAL LEVEL (M)')
+C      ENDIF
+C      WRITE(21,99) IT, TSEC/3600./24.,TIDE
+C   99 FORMAT(I15,(1PE10.2,2X),500(1PE10.3,1X))
+
+	  IF (IT.EQ.1) THEN  
+          OPEN(21,FILE='SAT.DAT',STATUS='UNKNOWN')   
+c          WRITE(21,101)
+c  101     FORMAT('  IT',4X,'TIME(DAY)',3X,'SATURATION')
       ENDIF
-      WRITE(21,99) IT, TSEC/3600./24.,TIDE
-   99 FORMAT(I15,(1PE10.2,2X),500(1PE10.3,1X))
+	  
+      WRITE(21,102) IT, TSEC/3600./24.,TIDE
       
       DO 200 IP=1,NPBC                                                   BCTIME.......12000
       I=IPBC(IP)                                                         BCTIME.......12100
@@ -194,13 +212,21 @@ C*******************************************************************************
              SEEPY=Y(IABS(I))+PM1(IABS(I))/10245
              SEEPX=X(IABS(I))
           ENDIF
-      ELSEIF(PM1(IABS(I)).GT.0.AND.Y(IABS(I)).LE.TIDE) THEN
-          CJGNUP(IP)=GNUP
-      ELSEIF(PM1(IABS(I)).LT.0.AND.Y(IABS(I)).GT.TIDE) THEN
+      ELSEIF(PM1(IABS(I)).GT.0.AND.Y(IABS(I)).LE.TIDE) THEN  
+          CJGNUP(IP)=GNUP*SW(IABS(I))**TSD
+      ELSEIF(PM1(IABS(I)).LT.0.AND.Y(IABS(I)).GT.TIDE) THEN  
           CJGNUP(IP)=0.D0
-      ELSEIF(PM1(IABS(I)).LT.0.AND.Y(IABS(I)).LE.TIDE) THEN
-          CJGNUP(IP)=GNUP
+
       ENDIF
+	  
+	  
+      WRITE(21,1102) CJGNUP(IP),SW(IABS(I)),PM1(IABS(I)),UM1(IABS(I))
+C      WRITE(21,102) IT,I, TSEC/3600./24.,TIDE,CJGNUP(IP),SW(IABS(I)),
+C	1 X(IABS(I)),Y(IABS(I)), PM1(IABS(I))
+C  102 FORMAT(I15,1X,I15,2X,(1PE10.2,2X),500(1PE10.3,1X))
+  102 FORMAT(I15,1X,500(1PE10.3,1X))
+ 1102 FORMAT(10(1PE10.3,1X))
+                                                           
 C******************************************************************************************	  
 C.....IBCPBC(IP) MUST BE SET TO -1 TO INDICATE THAT PBC(IP)              BCTIME.......12800
 C        AND/OR UBC(IP) HAVE BEEN SET BY SUBROUTINE BCTIME.              BCTIME.......12900
