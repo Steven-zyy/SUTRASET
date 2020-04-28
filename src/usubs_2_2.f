@@ -39,6 +39,8 @@ C      IMPLICIT NONE
       COMMON /CONTRL/ GNUP,GNUU,UP,DTMULT,DTMAX,ME,ISSFLO,ISSTRA,ITCYC, 
      1   NPCYC,NUCYC,NPRINT,NBCFPR,NBCSPR,NBCPPR,NBCUPR,IREAD,          
      2   ISTORE,NOUMAT,IUNSAT,KTYPE                                     
+      COMMON /PARAMS/ COMPFL,COMPMA,DRWDU,CW,CS,RHOS,SIGMAW,SIGMAS,
+     1   RHOW0,URHOW0,VISC0,PRODF1,PRODS1,PRODF0,PRODS0,CHI1,CHI2 
       DIMENSION KTYPE(2)                                                
       DOUBLE PRECISION TIDE
       REAL SEEPX,SEEPY ! The x- and y-coordinate of seepage node
@@ -180,12 +182,11 @@ C      ENDIF
 C      WRITE(21,99) IT, TSEC/3600./24.,TIDE
 C   99 FORMAT(I15,(1PE10.2,2X),500(1PE10.3,1X))
 
-	  IF (IT.EQ.1) THEN  
+       IF (IT.EQ.1) THEN  
           OPEN(21,FILE='SAT.DAT',STATUS='UNKNOWN')   
 c          WRITE(21,101)
 c  101     FORMAT('  IT',4X,'TIME(DAY)',3X,'SATURATION')
       ENDIF
-	  
       WRITE(21,102) IT, TSEC/3600./24.,TIDE
       
       DO 200 IP=1,NPBC                                                   BCTIME.......12000
@@ -197,7 +198,6 @@ C           TIME STEP IN WHICH PBC( ) CHANGES.                           BCTIME.
 C     PBC(IP) =  ((          ))                                          BCTIME.......12600
 C     UBC(IP) =  ((          ))                                          BCTIME.......12700
 C******************************************************************************************
-      PBC(IP)=9.8D0*(1000.D0+SC*713.D0)*(TIDE-Y(IABS(I)))
   
       IF(Y(IABS(I)).LE.TIDE) THEN
           UBC(IP)=SC
@@ -205,21 +205,24 @@ C*******************************************************************************
           UBC(IP)=0.D0   
       ENDIF
       
-      IF(PM1(IABS(I)).GT.0.AND.Y(IABS(I)).GT.TIDE) THEN
+      PBC(IP)=DABS(GRAVY)*(RHOW0+SC*DRWDU)*(TIDE-Y(IABS(I)))
+
+      IF(PM1(IABS(I)).GE.0.D0.AND.Y(IABS(I)).GT.TIDE) THEN        !SEEPAGE
           PBC(IP)=0.D0
           CJGNUP(IP)=GNUP
           IF(Y(IABS(I))+PM1(IABS(I))/10245.GT.SEEPY) THEN
              SEEPY=Y(IABS(I))+PM1(IABS(I))/10245
              SEEPX=X(IABS(I))
           ENDIF
-      ELSEIF(PM1(IABS(I)).GT.0.AND.Y(IABS(I)).LE.TIDE) THEN  
+      IF(PM1(IABS(I)).GE.0.D0.AND.Y(IABS(I)).LE.TIDE) THEN        !EXCHANG OF WATER BETWEEN SEABED AND GW
+          CJGNUP(IP)=GNUP
+      ELSEIF(PM1(IABS(I)).LT.0.D0.AND.Y(IABS(I)).LE.TIDE) THEN    !OVERTOPING TO UNSATURATED ZONE
           CJGNUP(IP)=GNUP*SW(IABS(I))**TSD
-      ELSEIF(PM1(IABS(I)).LT.0.AND.Y(IABS(I)).GT.TIDE) THEN  
+      ELSEIF(PM1(IABS(I)).LT.0.D0.AND.Y(IABS(I)).GT.TIDE) THEN    !UNSAT ZONE ABOVE TIDE
           CJGNUP(IP)=0.D0
 
       ENDIF
-	  
-	  
+
       WRITE(21,1102) CJGNUP(IP),SW(IABS(I)),PM1(IABS(I)),UM1(IABS(I))
 C      WRITE(21,102) IT,I, TSEC/3600./24.,TIDE,CJGNUP(IP),SW(IABS(I)),
 C	1 X(IABS(I)),Y(IABS(I)), PM1(IABS(I))
